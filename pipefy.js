@@ -6,19 +6,28 @@
     var debug = false;
     PipefyProfile = (function() {
       function PipefyProfile(config) {
-        var _this;
+        var _this = this;
+
         this.config = config;
         this.addTimer = __bind(this.addTimer, this);
-        this.pipeNameSelector = ".pipe-header .pipe-title a";
-        this.cardNameSelector = "div.card-title div.content h1.card-name";
-        this.actionSelector = ".card-action-dates";
+
+        if(this.isBeta()){
+          this.pipeNameSelector = ".pipe-header .navbar-title";
+          this.cardNameSelector = ".card-header .card-header-title";
+          this.actionSelector = ".card-sidebar .navbar-icons ul";
+          !debug || console.info("is beta");
+        }else{
+          this.pipeNameSelector = ".pipe-header .pipe-title a";
+          this.cardNameSelector = "div.card-title div.content h1.card-name";
+          this.actionSelector = ".card-action-dates";
+        }
         this.platformLoaded = false;
         this.actionElement = null;
         this.renderTries = 0;
         this.timerListItem = null;
 
-        _this = this;
         document.addEventListener('DOMContentLoaded', function() {
+          !debug || console.info("dom content loaded");
           _this.loadHarvestPlatform();
 
           _this.addTimerWhenUrlChanges();
@@ -31,7 +40,7 @@
           _this = this;
         platformConfig = {
           applicationName: "Pipefy",
-          permalink: "https://app.pipefy.com/pipes/%PROJECT_ID%#cards/%ITEM_ID%",
+          permalink: "https://"+(this.isBeta()?"beta":"app")+".pipefy.com/pipes/%PROJECT_ID%#cards/%ITEM_ID%",
           environment: "production",
           skipStyling: true
         };
@@ -50,8 +59,11 @@
       };
 
       PipefyProfile.prototype.addTimer = function() {
+        !debug || console.info("add timer");
         if (!this.isUrlCard())
           return;
+
+        !debug || console.info("card url!");
 
         var data, timer;
 
@@ -71,6 +83,7 @@
       };
 
       PipefyProfile.prototype.tryBuildTimer = function() {
+        !debug || console.info("try build called");
         setTimeout((function(_this) {
           return function() {
             _this.renderTries++;
@@ -102,11 +115,15 @@
       }
 
       PipefyProfile.prototype.getDataForTimer = function() {
+        !debug || console.info("fetching data");
         var itemName, link, linkParts, projectName, _ref, _ref1;
         itemName = (_ref = document.querySelector(this.cardNameSelector)) != null ? _ref.innerText.trim() : void 0;
         projectName = (_ref1 = document.querySelector(this.pipeNameSelector)) != null ? _ref1.innerText.trim() : void 0;
         link = window.location.href;
-        linkParts = link.match(/^https?:\/\/app\.pipefy\.com.*\/pipes\/([0-9]+)#cards\/([0-9]+)$/);
+        if(this.isBeta())
+          linkParts = link.match(/^https?:\/\/beta\.pipefy\.com.*\/pipes\/([0-9]+)#cards\/([0-9]+)$/);
+        else
+          linkParts = link.match(/^https?:\/\/app\.pipefy\.com.*\/pipes\/([0-9]+)#cards\/([0-9]+)$/);
 
         return {
           project: {
@@ -133,7 +150,12 @@
         }
 
         this.actionElement = actions;
-
+        if(this.isBeta())
+          this.injectBetaTimerHtml(data, actions);
+        else
+          this.injectTimerHtml(data, actions);
+      };
+      PipefyProfile.prototype.injectTimerHtml = function(data, actions) {
         var timer = document.createElement("div");
         timer.className = "harvest-timer js-add-trello-timer date-block white";
         timer.setAttribute("id", "harvest-trello-timer");
@@ -175,6 +197,34 @@
         actions.insertBefore(timer, actions.children[0]);
       };
 
+      PipefyProfile.prototype.injectBetaTimerHtml = function(data, actions) {
+        var icon = document.createElement("i");
+        icon.className = "icon-arrow-right";
+
+        var label = document.createElement("span");
+        label.className = "badge";
+        label.innerText = "harvest";
+
+        var timer = document.createElement("a");
+        timer.className = "harvest-timer js-add-trello-timer";
+        timer.setAttribute("id", "harvest-trello-timer");
+        timer.setAttribute("data-project", JSON.stringify(data.project));
+        timer.setAttribute("data-item", JSON.stringify(data.item));
+        timer.setAttribute("href", "#");
+
+        timer.appendChild(icon);
+        timer.appendChild(label);
+
+        timer.onclick = function(event){ event.preventDefault(); };
+
+        var container = document.createElement("li");
+        container.id = "time-tracker";
+
+        container.appendChild(timer);
+
+        actions.appendChild(container);
+      };
+
       PipefyProfile.prototype.notifyPlatformOfNewTimers = function() {
         var evt;
         evt = new CustomEvent("harvest-event:timers:chrome:add");
@@ -182,8 +232,16 @@
       };
 
       PipefyProfile.prototype.isUrlCard = function() {
+        !debug || console.info("is card?");
         var link = window.location.href;
-        return !!link.match(/^https?:\/\/app\.pipefy\.com.*\/pipes\/[0-9]+#\/?cards\/[0-9]+$/);
+        var result = !!link.match(/^https?:\/\/.*\.pipefy\.com\/(.*\/)?pipes\/[0-9]+#\/?cards\/[0-9]+$/);
+        !debug || console.info(result?"is card? yes":"is card? no");
+        return result;
+      }
+
+      PipefyProfile.prototype.isBeta = function() {
+        var link = window.location.href;
+        return !!link.match(/^https?:\/\/beta.pipefy\.com\/.+$/);
       }
 
       PipefyProfile.prototype.addTimerAgainIfElementRerendered = function() {
@@ -229,6 +287,7 @@
           if (evt.data !== "urlChange") {
             return;
           }
+          !debug || console.info("url changed");
           _this.addTimer();
         });
       };
